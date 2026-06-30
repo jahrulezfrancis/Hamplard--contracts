@@ -285,7 +285,7 @@
                   "string": "Professional Tailoring"
                 },
                 {
-                  "string": ""
+                  "string": "ref"
                 },
                 "void"
               ]
@@ -452,7 +452,7 @@
                         "symbol": "enrollment_reference"
                       },
                       "val": {
-                        "string": ""
+                        "string": "ref"
                       }
                     },
                     {
@@ -660,6 +660,49 @@
                       "val": {
                         "u32": 1
                       }
+                    }
+                  ]
+                }
+              }
+            },
+            "ext": "v0"
+          },
+          6300000
+        ]
+      ],
+      [
+        {
+          "contract_data": {
+            "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
+            "key": {
+              "vec": [
+                {
+                  "symbol": "CourseList"
+                }
+              ]
+            },
+            "durability": "persistent"
+          }
+        },
+        [
+          {
+            "last_modified_ledger_seq": 0,
+            "data": {
+              "contract_data": {
+                "ext": "v0",
+                "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
+                "key": {
+                  "vec": [
+                    {
+                      "symbol": "CourseList"
+                    }
+                  ]
+                },
+                "durability": "persistent",
+                "val": {
+                  "vec": [
+                    {
+                      "string": "COURSE-TAILORING-001"
                     }
                   ]
                 }

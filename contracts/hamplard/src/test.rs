@@ -577,7 +577,15 @@ fn test_full_lifecycle_enroll_complete_certify() {
     assert!(client.has_completed(&student, &course_id));
 
     // Issue certificate
-    client.issue_certificate(&admin, &cert_id, &student, &course_id, &course_title, &String::from_str(&env, ""), &None);
+    client.issue_certificate(
+        &admin,
+        &cert_id,
+        &student,
+        &course_id,
+        &course_title,
+        &String::from_str(&env, "ref"),
+        &None,
+    );
 
     // Verify certificate
     assert!(client.verify_certificate(&cert_id));
@@ -619,7 +627,8 @@ fn test_certificate_requires_completion() {
         &String::from_str(&env, "CERT-EARLY"),
         &student,
         &String::from_str(&env, "COURSE-NAILS-001"),
-        &String::from_str(&env, "Nail Technology"),        &String::from_str(&env, ""),
+        &String::from_str(&env, "Nail Technology"),
+        &String::from_str(&env, "ref"),
         &None,
     );
 }
@@ -657,7 +666,8 @@ fn test_revoke_certificate() {
         &cert_id,
         &student,
         &course_id,
-        &String::from_str(&env, "Makeup Artistry"),        &String::from_str(&env, ""),
+        &String::from_str(&env, "Makeup Artistry"),
+        &String::from_str(&env, "ref"),
         &None,
     );
 
@@ -708,7 +718,8 @@ fn test_revoke_certificate_metadata_persisted() {
         &cert_id,
         &student,
         &course_id,
-        &String::from_str(&env, "Audit Course"),        &String::from_str(&env, ""),
+        &String::from_str(&env, "Audit Course"),
+        &String::from_str(&env, "ref"),
         &None,
     );
 
@@ -1110,7 +1121,8 @@ fn test_issue_certificate_title_too_long() {
         &String::from_str(&env, "CERT-TITLE-LEN"),
         &student,
         &course_id,
-        &long_title,        &String::from_str(&env, ""),
+        &long_title,
+        &String::from_str(&env, "ref"),
         &None,
     );
 }
@@ -1147,7 +1159,8 @@ fn test_issue_certificate_id_too_long() {
         &long_cert_id,
         &student,
         &course_id,
-        &String::from_str(&env, "Valid Title"),        &String::from_str(&env, ""),
+        &String::from_str(&env, "Valid Title"),
+        &String::from_str(&env, "ref"),
         &None,
     );
 }
@@ -1342,7 +1355,8 @@ fn test_certificate_id_collision_across_courses() {
         &cert_id,
         &student_a,
         &course_a,
-        &String::from_str(&env, "Course A"),        &String::from_str(&env, ""),
+        &String::from_str(&env, "Course A"),
+        &String::from_str(&env, "ref_a"),
         &None,
     );
 
@@ -1361,7 +1375,8 @@ fn test_certificate_id_collision_across_courses() {
         &cert_id,
         &student_b,
         &course_b,
-        &String::from_str(&env, "Course B"),        &String::from_str(&env, ""),
+        &String::from_str(&env, "Course B"),
+        &String::from_str(&env, "ref_b"),
         &None,
     );
 }
@@ -1817,7 +1832,15 @@ fn test_revoke_certificate_unauthorized_includes_operation() {
     client.mark_completed(&admin, &student, &course_id, &None);
     let cert_id = String::from_str(&env, "CERT-REVOKE-UNAUTH-001");
     let course_title = String::from_str(&env, "Revoke Test Course");
-    client.issue_certificate(&admin, &cert_id, &student, &course_id, &course_title, &String::from_str(&env, ""), &None);
+    client.issue_certificate(
+        &admin,
+        &cert_id,
+        &student,
+        &course_id,
+        &course_title,
+        &String::from_str(&env, "ref"),
+        &None,
+    );
 
     // Instructor tries to revoke certificate — should panic with operation name
     client.revoke_certificate(
@@ -2139,7 +2162,8 @@ fn test_verify_certificate_returns_true_for_valid_cert() {
         &cert_id,
         &student,
         &course_id,
-        &String::from_str(&env, "Test Course"),        &String::from_str(&env, ""),
+        &String::from_str(&env, "Test Course"),
+        &String::from_str(&env, "ref"),
         &None,
     );
 
@@ -2179,7 +2203,8 @@ fn test_verify_certificate_returns_false_for_revoked_cert() {
         &cert_id,
         &student,
         &course_id,
-        &String::from_str(&env, "Test Course"),        &String::from_str(&env, ""),
+        &String::from_str(&env, "Test Course"),
+        &String::from_str(&env, "ref"),
         &None,
     );
 
@@ -2235,7 +2260,8 @@ fn test_verify_certificate_false_does_not_mutate_state() {
         &cert_id,
         &student,
         &course_id,
-        &String::from_str(&env, "Test Course"),        &String::from_str(&env, ""),
+        &String::from_str(&env, "Test Course"),
+        &String::from_str(&env, "ref"),
         &None,
     );
 
@@ -2371,6 +2397,106 @@ fn test_batch_enroll_respects_capacity() {
 
     // batch_enroll validates all courses before enrolling any — must panic
     client.batch_enroll(&student, &course_ids);
+}
+
+#[test]
+#[should_panic(expected = "total earned overflow")]
+fn test_enroll_total_earned_overflow() {
+    let (env, contract_id, token_id, admin, _sec_admin, _treasury, instructor) = setup();
+    let client = HamplardContractClient::new(&env, &contract_id);
+
+    let student = Address::generate(&env);
+    token::StellarAssetClient::new(&env, &token_id).mint(&student, &100_000_000_000);
+
+    register_and_approve_course(
+        &env,
+        &client,
+        &token_id,
+        &admin,
+        &instructor,
+        "COURSE-OVERFLOW-2",
+        1,
+    );
+
+    let course_id = String::from_str(&env, "COURSE-OVERFLOW-2");
+
+    let course_key = DataKey::Course(course_id.clone());
+    env.as_contract(&contract_id, || {
+        let mut course: Course = env.storage().persistent().get(&course_key).unwrap();
+        course.total_earned = i128::MAX;
+        env.storage().persistent().set(&course_key, &course);
+    });
+
+    client.enroll(&student, &course_id);
+}
+
+#[test]
+#[should_panic(expected = "course review period has not elapsed")]
+fn test_course_approval_time_lock_premature_panics() {
+    let (env, contract_id, token_id, admin, _sec_admin, _treasury, instructor) = setup();
+    let client = HamplardContractClient::new(&env, &contract_id);
+
+    // Set minimum review delay to 10 ledgers
+    client.update_min_review_delay(&admin, &10u32);
+
+    let course_id = String::from_str(&env, "COURSE-DELAYED-1");
+    client.register_course(
+        &instructor,
+        &course_id,
+        &100_000_000,
+        &token_id,
+        &0u32,
+        &None,
+    );
+
+    // Try to approve immediately — should panic
+    client.approve_course(&admin, &course_id);
+}
+
+#[test]
+fn test_course_approval_time_lock_success() {
+    let (env, contract_id, token_id, admin, _sec_admin, _treasury, instructor) = setup();
+    let client = HamplardContractClient::new(&env, &contract_id);
+
+    // Set minimum review delay to 10 ledgers
+    client.update_min_review_delay(&admin, &10u32);
+
+    let course_id = String::from_str(&env, "COURSE-DELAYED-2");
+    client.register_course(
+        &instructor,
+        &course_id,
+        &100_000_000,
+        &token_id,
+        &0u32,
+        &None,
+    );
+
+    // Advance ledger sequence by 10
+    env.ledger().with_mut(|l| {
+        l.sequence_number += 10;
+    });
+
+    // Approve now — should succeed
+    client.approve_course(&admin, &course_id);
+    let course = client.get_course(&course_id);
+    assert_eq!(course.status, CourseStatus::Active);
+}
+
+#[test]
+#[should_panic]
+fn test_register_course_invalid_token() {
+    let (env, contract_id, _, _, _, _, instructor) = setup();
+    let client = HamplardContractClient::new(&env, &contract_id);
+    let random_eoa = Address::generate(&env);
+
+    client.register_course(
+        &instructor,
+        &String::from_str(&env, "COURSE-INVALID-TOKEN"),
+        &500_000_000,
+        &random_eoa,
+        &0u32,
+        &None,
+    );
 }
 
 // ISSUE 49: GET ENROLLMENT AUTHENTICATION
@@ -2629,6 +2755,114 @@ fn test_frozen_instructor_cannot_register_course() {
         &None,
     );
 }
+#[test]
+fn test_refund_lifecycle() {
+    let (env, contract_id, token_id, admin, _sec_admin, _treasury, instructor) = setup();
+    let client = HamplardContractClient::new(&env, &contract_id);
+
+    let student = Address::generate(&env);
+    token::StellarAssetClient::new(&env, &token_id).mint(&student, &100_000_000_000);
+
+    register_and_approve_course(
+        &env,
+        &client,
+        &token_id,
+        &admin,
+        &instructor,
+        "COURSE-REFUND",
+        1_000_000_000,
+    );
+
+    let course_id = String::from_str(&env, "COURSE-REFUND");
+
+    // Configure refund window to 10 ledgers
+    client.update_refund_window(&admin, &10u32);
+    assert_eq!(client.get_refund_window(), 10u32);
+
+    // Enroll
+    client.enroll(&student, &course_id);
+    assert!(client.is_enrolled(&student, &course_id));
+
+    // Request refund
+    client.request_refund(&student, &course_id);
+
+    let request = client.get_refund_request(&student, &course_id).unwrap();
+    assert_eq!(request.status, RefundStatus::Pending);
+
+    // Approve refund
+    let initial_balance = token::Client::new(&env, &token_id).balance(&student);
+    env.mock_all_auths_allowing_non_root_auth();
+    client.process_refund(&admin, &student, &course_id, &true);
+
+    let final_balance = token::Client::new(&env, &token_id).balance(&student);
+    assert_eq!(final_balance - initial_balance, 1_000_000_000);
+    assert!(!client.is_enrolled(&student, &course_id));
+
+    let request_approved = client.get_refund_request(&student, &course_id).unwrap();
+    assert_eq!(request_approved.status, RefundStatus::Approved);
+}
+
+#[test]
+#[should_panic(expected = "refund window has expired")]
+fn test_refund_request_outside_window_fails() {
+    let (env, contract_id, token_id, admin, _sec_admin, _treasury, instructor) = setup();
+    let client = HamplardContractClient::new(&env, &contract_id);
+
+    let student = Address::generate(&env);
+    token::StellarAssetClient::new(&env, &token_id).mint(&student, &100_000_000_000);
+
+    register_and_approve_course(
+        &env,
+        &client,
+        &token_id,
+        &admin,
+        &instructor,
+        "COURSE-REFUND-EXP",
+        1_000_000_000,
+    );
+
+    let course_id = String::from_str(&env, "COURSE-REFUND-EXP");
+    client.update_refund_window(&admin, &5u32);
+
+    client.enroll(&student, &course_id);
+
+    // Advance ledger sequence by 6
+    env.ledger().with_mut(|l| {
+        l.sequence_number += 6;
+    });
+
+    client.request_refund(&student, &course_id);
+}
+
+#[test]
+fn test_refund_rejection() {
+    let (env, contract_id, token_id, admin, _sec_admin, _treasury, instructor) = setup();
+    let client = HamplardContractClient::new(&env, &contract_id);
+
+    let student = Address::generate(&env);
+    token::StellarAssetClient::new(&env, &token_id).mint(&student, &100_000_000_000);
+
+    register_and_approve_course(
+        &env,
+        &client,
+        &token_id,
+        &admin,
+        &instructor,
+        "COURSE-REJECT",
+        1_000_000_000,
+    );
+
+    let course_id = String::from_str(&env, "COURSE-REJECT");
+    client.enroll(&student, &course_id);
+
+    client.request_refund(&student, &course_id);
+    env.mock_all_auths_allowing_non_root_auth();
+    client.process_refund(&admin, &student, &course_id, &false);
+
+    let request = client.get_refund_request(&student, &course_id).unwrap();
+    assert_eq!(request.status, RefundStatus::Rejected);
+    assert!(client.is_enrolled(&student, &course_id));
+}
 
 #[test]
 #[should_panic(expected = "instructor is frozen")]
@@ -2647,4 +2881,3 @@ fn test_frozen_instructor_enrollment_blocked() {
     // Attempting to enroll in the frozen instructor's course must fail
     client.enroll(&student, &String::from_str(&env, "PRE-FREEZE-COURSE"));
 }
-
